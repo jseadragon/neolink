@@ -501,6 +501,32 @@ There are currently 2 environmental variables available as part of the container
 - `NEO_LINK_MODE`: defaults to `"rtsp"` if not set, other options are "mqtt" or "mqtt-rtsp".
 - `NEO_LINK_PORT`: defaults to `8554`, set this to your required port value.
 
+### Video-only workaround for incompatible audio
+
+Some cameras authenticate successfully but fail to open an RTSP stream when
+Neolink attempts to decode incompatible audio. This fork adds an
+optional video-only workaround. Audio remains unchanged unless the environment
+variable `NEOLINK_DISABLE_AUDIO` is set.
+
+```bash
+NEOLINK_DISABLE_AUDIO=1 ./neolink rtsp --config=neolink.toml
+```
+
+When set (including to an empty value or `0`), this variable omits audio tracks
+from every RTSP stream. Video continues to pass through without re-encoding.
+Remove the variable and restart Neolink to restore the original audio behavior.
+This does not change camera settings or fix the underlying audio decoder.
+
+To build a container with the workaround enabled by default:
+
+```bash
+docker build -f Dockerfile.video-only -t neolink:video-only .
+```
+
+The existing `Dockerfile` keeps the original behavior. The Home Assistant add-on
+is a separate project and must be configured to use a compatible build before
+it benefits from this change.
+
 ### Image
 
 You can write an image from the stream to disk using:

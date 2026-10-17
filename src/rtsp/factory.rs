@@ -191,6 +191,11 @@ pub(super) async fn make_factory(
                             frame_count += 1;
                         }
 
+                        // Optional video-only workaround for incompatible camera audio.
+                        if std::env::var_os("NEOLINK_DISABLE_AUDIO").is_some() {
+                            stream_config.aud_type = None;
+                        }
+
                         log::trace!("{name}::{stream}: Building the pipeline");
                         // Build the right video pipeline
                         let vid_src = match stream_config.vid_type.as_ref() {
