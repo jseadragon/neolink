@@ -75,8 +75,8 @@ jobs:
           compression-level: 0
 
   publish:
-    # Publishing is opt-in; build jobs have no package-write token.
-    if: github.repository == 'jseadragon/neolink' && vars.PUBLISH_HA_IMAGE == 'true'
+    # Only this job receives package-write permission; builders remain read-only.
+    if: github.repository == 'jseadragon/neolink'
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 10
