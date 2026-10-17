@@ -1,0 +1,30 @@
+name: Neolink Video Only
+version: "0.1.0"
+slug: neolink_video_only
+description: Local camera-to-RTSP bridge with optional audio suppression
+url: https://github.com/jseadragon/neolink/tree/video-only-audio-workaround/ha-addon/neolink-video-only
+arch:
+  - aarch64
+  - amd64
+stage: experimental
+startup: application
+boot: auto
+init: true
+host_network: true
+options:
+  bind: "127.0.0.1"
+  bind_port: 8558
+  disable_audio: true
+  log_level: info
+  cameras: []
+schema:
+  bind: str
+  bind_port: port
+  disable_audio: bool
+  log_level: list(error|warn|info|debug)
+  cameras:
+    - name: match(^[A-Za-z0-9_-]+$)
+      address: str
+      username: str
+      password: password
+      stream: list(Main|Sub|Both)?
