@@ -1,0 +1,98 @@
+name: Build Home Assistant add-on image
+
+on:
+  push:
+    branches: [video-only-audio-workaround]
+    paths:
+      - '.github/workflows/ha-addon-image.yml'
+      - 'ha-addon/neolink-video-only/Dockerfile'
+      - 'ha-addon/neolink-video-only/run.py'
+      - 'ha-addon/neolink-video-only/image-version'
+      - 'ha-addon/neolink-video-only/test_launcher.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ha-addon-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'jseadragon/neolink'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read image version
+        id: version
+        run: |
+          version=$(cat ha-addon/neolink-video-only/image-version)
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build native image
+        uses: docker/build-push-action@v6
+        with:
+          context: ha-addon/neolink-video-only
+          platforms: ${{ matrix.platform }}
+          load: true
+          tags: ghcr.io/jseadragon/neolink-ha:${{ steps.version.outputs.value }}-${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/jseadragon/neolink
+            org.opencontainers.image.description=Neolink Home Assistant add-on with optional audio suppression
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
+          cache-from: type=gha,scope=neolink-ha-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=neolink-ha-${{ matrix.arch }}
+      - name: Test launcher and binary
+        env:
+          IMAGE: ghcr.io/jseadragon/neolink-ha:${{ steps.version.outputs.value }}-${{ matrix.arch }}
+        run: |
+          docker run --rm --network none --entrypoint /usr/local/bin/neolink "$IMAGE" --version
+          docker run --rm --network none --entrypoint python3 -v "$PWD/ha-addon/neolink-video-only/test_launcher.py:/test_launcher.py:ro" "$IMAGE" /test_launcher.py
+      - name: Publish tested architecture
+        run: docker push ghcr.io/jseadragon/neolink-ha:${{ steps.version.outputs.value }}-${{ matrix.arch }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish multi-architecture version
+        run: |
+          version=$(cat ha-addon/neolink-video-only/image-version)
+          docker buildx imagetools create --tag "ghcr.io/jseadragon/neolink-ha:$version" \
+            "ghcr.io/jseadragon/neolink-ha:$version-amd64" \
+            "ghcr.io/jseadragon/neolink-ha:$version-aarch64"
+          docker buildx imagetools inspect "ghcr.io/jseadragon/neolink-ha:$version"
+          echo "Published ghcr.io/jseadragon/neolink-ha:$version for amd64 and arm64." >> "$GITHUB_STEP_SUMMARY"
+          echo "The package must be public before Home Assistant can download it without credentials." >> "$GITHUB_STEP_SUMMARY"
