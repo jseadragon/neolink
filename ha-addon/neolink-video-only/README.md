@@ -1,8 +1,8 @@
 # Neolink Video Only for Home Assistant OS
 
-An experimental add-on that builds this fork's video-only workaround from a
-pinned source revision. Supports amd64 and aarch64. The first installation
-compiles Neolink on the Home Assistant machine and can take several minutes.
+An experimental add-on using prebuilt images of this fork's video-only
+workaround, compiled from a pinned source revision. Supports amd64 and aarch64.
+Home Assistant downloads the image; installation does not compile Neolink.
 
 ## Install
 
@@ -39,3 +39,17 @@ LAN. This add-on does not configure RTSP authentication, so changing `bind` to
 Camera credentials remain in Supervisor options and a private generated config;
 they are not printed by the launcher. Keep Home Assistant backups private.
 This package has no web interface; use the Home Assistant dashboard or Scrypted.
+
+## Image publishing
+
+The `Build Home Assistant add-on image` GitHub Actions workflow builds on native
+Linux amd64 and arm64 runners, checks the binary and launcher, and publishes
+`ghcr.io/jseadragon/neolink-ha` with a multi-architecture version tag.
+Builds use the `image-version` file. Update that file to publish a new release;
+only then update `config.yaml` to the matching version once the image is public
+and downloadable. Source changes require updating the pinned commit in the
+Dockerfile. Cached layers speed up subsequent builds.
+
+The GitHub package must have public visibility for Home Assistant to pull it
+without registry credentials. Public repository visibility alone does not make
+a newly created container package public.
