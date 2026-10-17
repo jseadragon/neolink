@@ -10,6 +10,7 @@ env:
 
 jobs:
   pre_job:
+    if: github.repository == 'QuantumEntangledAndy/neolink'
     # continue-on-error: true # Uncomment once integration is finished
     runs-on: ubuntu-latest
     # Map a step output to a job output
