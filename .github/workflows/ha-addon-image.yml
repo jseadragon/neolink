@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: ha-addon-image-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -35,9 +35,10 @@ jobs:
     timeout-minutes: 45
     permissions:
       contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Read image version
         id: version
         run: |
@@ -45,11 +46,6 @@ jobs:
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           echo "value=$version" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build native image
         uses: docker/build-push-action@v6
         with:
@@ -69,10 +65,18 @@ jobs:
         run: |
           docker run --rm --network none --entrypoint /usr/local/bin/neolink "$IMAGE" --version
           docker run --rm --network none --entrypoint python3 -v "$PWD/ha-addon/neolink-video-only/test_launcher.py:/test_launcher.py:ro" "$IMAGE" /test_launcher.py
-      - name: Publish tested architecture
-        run: docker push ghcr.io/jseadragon/neolink-ha:${{ steps.version.outputs.value }}-${{ matrix.arch }}
+      - name: Export tested image
+        run: docker save ghcr.io/jseadragon/neolink-ha:${{ steps.version.outputs.value }}-${{ matrix.arch }} | gzip > image.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ matrix.arch }}
+          path: image.tar.gz
+          retention-days: 1
+          compression-level: 0
 
   publish:
+    # Publishing is opt-in; build jobs have no package-write token.
+    if: github.repository == 'jseadragon/neolink' && vars.PUBLISH_HA_IMAGE == 'true'
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -81,15 +85,28 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: image-*
+          path: images
+      - name: Load tested images
+        run: |
+          for archive in images/*/image.tar.gz; do
+            gzip -dc "$archive" | docker load
+          done
       - name: Publish multi-architecture version
         run: |
           version=$(cat ha-addon/neolink-video-only/image-version)
+          docker push "ghcr.io/jseadragon/neolink-ha:$version-amd64"
+          docker push "ghcr.io/jseadragon/neolink-ha:$version-aarch64"
           docker buildx imagetools create --tag "ghcr.io/jseadragon/neolink-ha:$version" \
             "ghcr.io/jseadragon/neolink-ha:$version-amd64" \
             "ghcr.io/jseadragon/neolink-ha:$version-aarch64"
